@@ -1,0 +1,86 @@
+---
+# BMC credential secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node1-bmc-secret # CHANGEME
+  namespace: baremetal-operator-system
+type: Opaque
+stringData:
+  # The username and password for your server's BMC (iDRAC/iLO/IPMI)
+  username: # CHANGEME
+  password: # CHANGEME
+---
+# Static Network configuration used for pre-active stages. This will also apply
+# unless a separate network configuration for deployment is created and specified.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node1-static-net #CHANGEME
+  namespace: baremetal-operator-system
+type: Opaque
+stringData:
+  networkData: |
+    {
+      "links": [
+          {
+              "id": "CHANGEME",
+              "type": "phy",
+              "ethernet_mac_address": "CHANGEME"
+          }
+      ],
+      "networks": [
+          {
+              "id": "port0",
+              "type": "ipv4",
+              "link": "CHANGEME",
+              "ip_address": "CHANGEME",
+              "netmask": "CHANGEME",
+              "network_id": "network0",
+              "routes": [
+                {"network": "0.0.0.0", "netmask": "0.0.0.0", "gateway": "CHANGEME"}
+              ]
+          }
+      ],
+      "services": [
+        {"type": "dns", "address": "8.8.8.8"}
+      ]
+    }
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: node-1 # CHANGEME
+  namespace: baremetal-operator-system
+spec:
+  # Setting this to true allows BMO to power it on for the inspection phase
+  online: true
+  bootMode: UEFI
+  bootMACAddress: "" # CHANGEME
+  bmc:
+    address: redfish-virtualmedia://x.x.x.x # CHANGEME BMC IP Address
+    credentialsName: node1-bmc-secret # CHANGEME should match the bmc configuration name above
+    disableCertificateVerification: true
+  preprovisioningNetworkDataName: node1-static-net # CHANGEME should match the static network config name above
+  # Below, this is all of the stuff for provisioning.
+  # Uncomment to initiate provision.
+  # Comment to deprovision.
+  # image:
+  #   url: "http://<IP of k3s node>:8080/<os-image-name>.img"
+  #   checksum: "http://<IP of k3s node>:8080/SHA256SUMS"  # or the raw sha256 hash string
+  #   checksumType: sha256
+  #   format: qcow2  # or omit for auto-detect
+  # userData:
+  #   name: # Name of userdata secret
+---
+# This enables and configures the firmware update policy for the node.
+apiVersion: metal3.io/v1alpha1
+kind: HostUpdatePolicy
+metadata:
+  name: node-1
+  namespace: baremetal-operator-system
+spec:
+  # onReboot for active machines, applies after reboot.
+  # onPreparing for available machines, applies during preparing state.
+  firmwareUpdates: onPreparing
+  firmwareSettings: onPreparing

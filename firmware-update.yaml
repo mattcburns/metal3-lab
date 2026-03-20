@@ -1,0 +1,18 @@
+# Fetch the current version of this and us it instead - you can use this file but you
+# will get a warning.
+# kubectl get hostfirmwarecomponents <your-bmh-name> -n <namespace> -o yaml > current-hostfirmwarecomponents.yaml
+apiVersion: metal3.io/v1alpha1
+kind: HostFirmwareComponents
+metadata:
+  name: node-1       # Must match your BareMetalHost name
+  namespace: baremetal-operator-system
+spec:
+  updates:
+    - component: bios # bios or bmc, some nics supported.
+      url: <path to your firmware package>  # Your hosted firmware file (e.g. .bin, .rom, vendor .exe package)
+      # Optional fields (if your vendor/Ironic driver supports them):
+      # checksum: http://.../firmware.sha256   # or inline sha256 string
+      # checksumType: sha256
+    # You can add more if needed, e.g.:
+    # - component: bmc
+    #   url: http://.../bmc-firmware.bin
