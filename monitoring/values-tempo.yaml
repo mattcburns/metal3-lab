@@ -1,0 +1,24 @@
+tempo:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  # Turn on the metrics-generator to fix the empty ring error
+  metricsGenerator:
+    enabled: true
+    # Point Tempo to the Prometheus service to store the generated metrics
+    remoteWriteUrl: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+
+  # Explicitly activate the processor that answers TraceQL rate() queries
+  global_overrides:
+    defaults:
+      metrics_generator:
+        processors: ['local-blocks', 'service-graphs', 'span-metrics']
+
+persistence:
+  enabled: true
+  size: 10Gi

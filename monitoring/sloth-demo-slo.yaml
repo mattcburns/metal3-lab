@@ -1,0 +1,28 @@
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: ironic
+  namespace: baremetal-operator-system
+  labels:
+    release: monitoring
+spec:
+  service: "ironic"
+  labels:
+    owner: "platform-team"
+    tier: "2"
+    env: "demo-k3s"
+  slos:
+    # 1. Ironic API availability (99.95 %)
+    - name: "ironic-api-availability"
+      objective: 99.95
+      description: "Ironic API is available 99.95% of the time."
+      sli:
+        raw:
+          errorRatioQuery: |
+            1 - (sum(sum_over_time(up{namespace="baremetal-operator-system", job="ironic", service="ironic"}[{{ .window }}])) / sum(count_over_time(up{namespace="baremetal-operator-system", job="ironic", service="ironic"}[{{ .window }}])))
+      alerting:
+        name: "Metal3IronicAPIHighErrorRate"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "Ironic API availability is burning error budget too fast"

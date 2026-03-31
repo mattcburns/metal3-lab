@@ -1,0 +1,132 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: idrac-exporter-config
+  namespace: baremetal-operator-system
+data:
+  idrac.yml: |
+    metrics:
+      all: true
+    hosts:
+      # REPLACE these IP addresses with the actual BMC IPs of your nodes
+      127.0.0.1:
+        username: ${NODE1_USER}
+        password: ${NODE1_PASS}
+      127.0.0.1:
+        username: ${NODE2_USER}
+        password: ${NODE2_PASS}
+      127.0.0.1:
+        username: ${NODE3_USER}
+        password: ${NODE3_PASS}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idrac-exporter
+  namespace: baremetal-operator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: idrac-exporter
+  template:
+    metadata:
+      labels:
+        app: idrac-exporter
+    spec:
+      containers:
+      - name: idrac-exporter
+        image: ghcr.io/mrlhansen/idrac_exporter:latest # Ensure you use v2.3.2+ for env vars
+        args:
+          - -config=/etc/idrac_exporter/idrac.yml
+          - -verbose
+        ports:
+        - containerPort: 9348
+          name: metrics
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/idrac_exporter
+        env:
+        # --- NODE 1 CREDENTIALS ---
+        - name: NODE1_USER
+          valueFrom:
+            secretKeyRef:
+              name: node1-bmc-secret # REPLACE with the exact metal3 secret name for node-1
+              key: username
+        - name: NODE1_PASS
+          valueFrom:
+            secretKeyRef:
+              name: node1-bmc-secret
+              key: password
+
+        # --- NODE 2 CREDENTIALS ---
+        - name: NODE2_USER
+          valueFrom:
+            secretKeyRef:
+              name: node2-bmc-secret # REPLACE with the exact metal3 secret name for node-2
+              key: username
+        - name: NODE2_PASS
+          valueFrom:
+            secretKeyRef:
+              name: node2-bmc-secret
+              key: password
+
+        # --- NODE 3 CREDENTIALS ---
+        - name: NODE3_USER
+          valueFrom:
+            secretKeyRef:
+              name: node3-bmc-secret # REPLACE with the exact metal3 secret name for node-3
+              key: username
+        - name: NODE3_PASS
+          valueFrom:
+            secretKeyRef:
+              name: node3-bmc-secret
+              key: password
+      volumes:
+      - name: config-volume
+        configMap:
+          name: idrac-exporter-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: idrac-exporter
+  namespace: baremetal-operator-system
+  labels:
+    app: idrac-exporter
+spec:
+  ports:
+  - port: 9348
+    targetPort: metrics
+    name: metrics
+  selector:
+    app: idrac-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: idrac-exporter-targets
+  namespace: baremetal-operator-system
+  labels:
+    # IMPORTANT: This must match the `probeSelector` configured on your Prometheus instance.
+    # Common defaults are 'release: kube-prometheus-stack' or 'prometheus: k8s'
+    release: monitoring
+spec:
+  jobName: dell-bmc-metrics
+  # The 'prober' is our exporter service acting as the middleman
+  interval: 180s
+  scrapeTimeout: 45s
+  prober:
+    url: idrac-exporter.baremetal-operator-system.svc.cluster.local:9348
+    path: /metrics
+  # The 'targets' are the actual BMC IPs we want the prober to query
+  targets:
+    staticConfig:
+      static:
+      # Replace these IPs with the corresponding IPs for the BMCs
+        - 127.0.0.1  # node-1 BMC
+        - 127.0.0.1  # node-2 BMC
+        - 127.0.0.1  # node-3 BMC

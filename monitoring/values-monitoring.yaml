@@ -1,0 +1,40 @@
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+  initChownData:
+    enabled: false
+  additionalDataSources:
+    - name: Tempo-Traces
+      type: tempo
+      uid: tempo-traces
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      jsonData:
+        nodeGraph:
+          enabled: false
+        serviceMap:
+          enabled: false
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        derivedFields:
+          - name: TraceID
+            matcherRegex: 'trace_id[=:]"?(\w+)'
+            datasourceUid: tempo-traces
+            url: '$${__value.raw}'
+
+prometheus:
+  prometheusSpec:
+    retention: "15d"
+    retentionSize: "10GB"
+    enableRemoteWriteReceiver: true
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+
+alertmanager:
+  enabled: true

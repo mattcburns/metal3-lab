@@ -20,18 +20,101 @@ metal3 - Baremetal provisioning service
 1. Install k3s on control node: `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable servicelb" sh -`
 1. Setup cert-manager on control node: `kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml`
 1. Configure a local web server for hosting OS images:
-  ```
-  docker run -d \
-    --name simple-images \
-    -p 8080:80 \
-    -v /full/path/to/image/folder:/usr/share/nginx/html:ro \
-    --restart unless-stopped \
-    nginx:alpine
-  ```
+    ```
+    docker run -d \
+      --name simple-images \
+      -p 8080:80 \
+      -v /full/path/to/image/folder:/usr/share/nginx/html:ro \
+      --restart unless-stopped \
+      nginx:alpine
+    ```
 1. Install IrSO (Ironic Standalone Operator): `kubectl apply -f https://github.com/metal3-io/ironic-standalone-operator/releases/latest/download/install.yaml`
 1. Create the baremetal-operator-system namespace `kubectl create namespace baremetal-operator-system`
 1. Customize the yaml below and apply it with `kubectl -f apply install-ironic.yaml`
 1. Install BMO (Bare Metal Operator): `kubectl apply -k bmo/`
+
+## Install Monitoring
+
+1. Create the monitoring namespace with `kubectl create namespace monitoring`
+1. Add the helm repos:
+    ``` bash
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo add grafana https://grafana.github.io/helm-charts
+    helm repo add sloth https://slok.github.io/sloth
+    helm repo update
+    ```
+1. Install the various monitoring charts:
+    ``` bash
+    # Core metrics
+    helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+      --namespace monitoring \
+      --create-namespace \
+      -f monitoring/values-monitoring.yaml
+
+    # Loki
+    helm upgrade --install loki grafana/loki \
+      --namespace monitoring \
+      -f monitoring/values-loki.yaml
+
+    # Alloy (log collector)
+    helm upgrade --install alloy grafana/alloy \
+      --namespace monitoring \
+      -f monitoring/values-alloy.yaml
+
+    # Tempo DB (tracing)
+    helm upgrade --install tempo grafana/tempo \
+      --namespace monitoring \
+      -f monitoring/values-tempo.yaml
+
+    # Beyla (eBPF based tracing)
+    helm upgrade --install beyla grafana/beyla \
+      --namespace monitoring \
+      -f monitoring/values-beyla.yaml
+
+    # SLOth (SLO monitoring)
+    helm install sloth sloth/sloth \
+      --namespace monitoring \
+      --create-namespace
+
+    # SLOth Demo SLO (availability of ironic)
+    kubectl apply -f monitoring/sloth-demo-slo.yaml
+    ```
+1. Disable Loki-canary if you want (it generates a lot of data) `kubectl delete daemonset loki-canary -n monitoring`
+
+1. Install the monitoring for the BMCs. This uses `mrlhansen/idrac_exporter` and is compatible with most
+  redfish based BMCs (iDRAC, iLO, SMC). Our configuration is just hand configured YAML because of the low
+  number of servers - in prod you'd want to have some automation (helm templating) around generating the
+  config. This configuration also re-uses the metal3 baremetalhost bmc secret to reduce duplication.
+  ``` bash
+  kubectl apply -f idrac_prometheus.yaml
+  ```
+
+### Grafana Dashboards:
+
+1. For SLOth, `14643` is for the high-level SLOs and `14348` is for the detailed SLO view.
+1. For BMCs there are two from `mrlhansen/idrac_exporter`:
+   ```
+   # Overview
+   https://github.com/mrlhansen/idrac_exporter/blob/master/grafana/idrac_overview.json
+
+   # Per Node
+   https://github.com/mrlhansen/idrac_exporter/blob/master/grafana/idrac.json
+   ```
+
+
+### Handy Monitoring CLI Commands:
+
+``` bash
+# Get Password:
+kubectl --namespace monitoring get secrets monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+# Check status:
+kubectl --namespace monitoring get pods -l "release=monitoring"
+
+# Access local instance:
+export POD_NAME=$(kubectl --namespace monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=monitoring" -oname)
+  kubectl --namespace monitoring port-forward $POD_NAME 3000
+```
 
 ## Adding Servers
 

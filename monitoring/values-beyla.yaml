@@ -1,0 +1,32 @@
+# Run on every node to catch all traffic
+preset: daemonset
+
+# Ensure Beyla has the required kernel permissions for eBPF
+env:
+  BEYLA_PROMETHEUS_FEATURES: "true"
+
+config:
+  data:
+    # Tell Beyla to attach Kubernetes labels to the traces
+    attributes:
+      kubernetes:
+        enable: true
+    # Tell Beyla to discover and trace EVERYTHING
+    discovery:
+      services:
+        - k8s_namespace: ".*"
+    # Send traces to our newly opened Alloy ports
+    otel_traces_export:
+      endpoint: "http://alloy.monitoring.svc.cluster.local:4318"
+    network:
+      enable: true
+    routes:
+      unmatched: heuristic
+privileged: true
+securityContext:
+  privileged: true
+hostPID: true
+hostNetwork: true
+podAnnotations:
+  # Disable Ubuntu 24.04+ apparmor for beyla
+  container.apparmor.security.beta.kubernetes.io/beyla: unconfined

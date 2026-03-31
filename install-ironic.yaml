@@ -1,0 +1,30 @@
+apiVersion: ironic.metal3.io/v1alpha1
+kind: Ironic
+metadata:
+  name: ironic
+  namespace: baremetal-operator-system   # ← most common with the official install.yaml + BMO
+spec:
+  # Optional but recommended: pin a stable Ironic version (or leave "latest")
+  version: "latest"
+
+  # THIS IS THE CRITICAL FIELD for virtual-media-only
+  # Set it to the *real* IP of your k3s node (the one your BMCs can reach)
+  # Ironic will use this for:
+  #   - virtual media ISO URLs (httpd)
+  #   - callback/heartbeat URLs from the IPA ramdisk
+  networking:
+    externalIP: "x.x.x.x"   # ←←← CHANGE TO YOUR K3S NODE IP
+
+  # Strongly recommended for lab debugging
+  # Lets you `ssh core@<BMC-IP>` into the IPA ramdisk during provisioning
+  deployRamdisk:
+    sshKey: "<your public key>"
+
+  # Optional but nice for lab (avoids TLS issues with some older BMCs)
+  tls:
+    disableVirtualMediaTLS: true
+
+  prometheusExporter:
+    enabled: true
+    sensorCollectionInterval: 180
+    disableServiceMonitor: false
