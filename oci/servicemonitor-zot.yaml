@@ -1,0 +1,21 @@
+# We need this because the zot chart is broken and doesn't include the ServiceMonitor by default. This is a workaround to add it manually.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zot-registry-monitor
+  namespace: zot-system
+  labels:
+    # Adding this label just as a best practice, even though your
+    # Prometheus operator is currently discovering everything ({})
+    monitoring: "true"
+spec:
+  selector:
+    # These are the standard labels the Helm chart applied to your Zot service
+    matchLabels:
+      app.kubernetes.io/instance: zot-registry
+      app.kubernetes.io/name: zot
+  endpoints:
+    # Using targetPort bypasses the need for the Service port to have a specific string name
+    - targetPort: zot
+      path: /metrics
+      interval: 15s

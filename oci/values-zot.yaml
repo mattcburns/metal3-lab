@@ -1,0 +1,83 @@
+# ---------------------------------------------------------
+# Authentication (NEW)
+# ---------------------------------------------------------
+auth:
+  htpasswd:
+    # This tells the Helm chart to mount the secret we are about to create
+    secretName: "zot-auth-secret"
+
+config.json: |-
+    {
+      "storage": {
+        "rootDirectory": "/var/lib/registry"
+      },
+      "http": {
+        "externalURL": "https://metal3.matthewburns.dev",
+        "address": "0.0.0.0",
+        "port": "5000",
+        "auth": {
+          "htpasswd": {
+            "path": "/etc/zot/auth/htpasswd"
+          }
+        },
+        "accessControl": {
+          "repositories": {
+            "**": {
+              "anonymousPolicy": [
+                "read"
+              ],
+              "defaultPolicy": [
+                "read",
+                "create",
+                "update",
+                "delete"
+              ]
+            }
+          }
+        }
+      },
+      "log": {
+        "level": "debug"
+      },
+      "extensions": {
+        "search": {
+          "enable": true
+        },
+        "ui": {
+          "enable": true
+        },
+        "metrics": {
+          "enable": true,
+          "prometheus": {
+            "path": "/metrics"
+          }
+        }
+      }
+    }
+
+# ---------------------------------------------------------
+# Monitoring (Prometheus Operator)
+# ---------------------------------------------------------
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+# ---------------------------------------------------------
+# Storage
+# ---------------------------------------------------------
+persistence: true
+pvc:
+  create: true
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  storage: 250Gi
+
+# ---------------------------------------------------------
+# Networking (UPDATED)
+# ---------------------------------------------------------
+service:
+  # Changed to ClusterIP. Traefik will route traffic here automatically.
+  type: ClusterIP
+  port: 5000

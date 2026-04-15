@@ -19,19 +19,45 @@ metal3 - Baremetal provisioning service
 
 1. Install k3s on control node: `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable servicelb" sh -`
 1. Setup cert-manager on control node: `kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml`
-1. Configure a local web server for hosting OS images:
-    ```
-    docker run -d \
-      --name simple-images \
-      -p 8080:80 \
-      -v /full/path/to/image/folder:/usr/share/nginx/html:ro \
-      --restart unless-stopped \
-      nginx:alpine
-    ```
 1. Install IrSO (Ironic Standalone Operator): `kubectl apply -f https://github.com/metal3-io/ironic-standalone-operator/releases/latest/download/install.yaml`
 1. Create the baremetal-operator-system namespace `kubectl create namespace baremetal-operator-system`
 1. Customize the yaml below and apply it with `kubectl -f apply install-ironic.yaml`
 1. Install BMO (Bare Metal Operator): `kubectl apply -k bmo/`
+
+## Deploy Let's Encrypt for Cert Manager
+
+1. Modify and apply the Let's Encrypt ClusterIssuer `kubectl apply -f oci/cluster-issuer.yaml`
+
+## Deploy Zot as OCI registry for storing OS images:
+
+1. Add the Zot help repo:
+  ``` bash
+  helm repo add project-zot http://zotregistry.dev/helm-charts
+  helm repo update project-zot
+  ```
+1. If you haven't already, ensure the file descripters are set high:
+  ``` bash
+  echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+  echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf
+
+  # Reload the configuration
+  sudo sysctl -p
+  ```
+1. Create zot namespace `kubectl create namespace zot-system`
+1. Setup basic http auth for pushing to Zot (pulling is no-auth)
+  ``` bash
+  htpasswd -Bc auth admin
+  kubectl create secret generic zot-auth-secret --from-file=htpasswd=auth -n zot-system
+  ```
+1. Customize the `zot-values.yaml` file and install it:
+  ``` bash
+  helm upgrade zot-registry project-zot/zot \
+  --namespace zot-system \
+  --create-namespace \
+  -f oci/values-zot.yaml
+  ```
+1. Apply the servicemonitor manually due to bug in helm chart `kubectl apply -f oci/servicemonitor-zot.yaml`
+1. Modify and apply the Let's Encrypt ingress for zot: `kubectl apply -f oci/le-ingress-zot.yaml`
 
 ## Install Monitoring
 
@@ -101,6 +127,39 @@ metal3 - Baremetal provisioning service
    https://github.com/mrlhansen/idrac_exporter/blob/master/grafana/idrac.json
    ```
 
+### Handy Zot CLI Commands:
+
+``` bash
+# Get the application URL by running these commands:
+export NODE_PORT=$(kubectl get --namespace zot-system -o jsonpath="{.spec.ports[0].nodePort}" services zot-registry)
+export NODE_IP=$(kubectl get nodes --namespace zot-system -o jsonpath="{.items[0].status.addresses[0].address}")
+echo http://$NODE_IP:$NODE_PORT
+
+# Check Zot metrics are going out by forwarding port
+kubectl port-forward svc/zot-registry -n zot-system 5000:5000
+curl http://localhost:5000/metrics
+
+# Check the status of your Helm release
+helm list -n zot-system
+
+# Find the exact NodePort assigned to your service
+export NODE_PORT=$(kubectl get --namespace zot-system -o jsonpath="{.spec.ports[0].nodePort}" services zot-registry-zot)
+export NODE_IP=$(kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}")
+
+# Verify the registry is responding to API calls (should return an empty repository list)
+curl http://$NODE_IP:$NODE_PORT/v2/_catalog
+
+# Get IP/Port of Zot
+kubectl get svc -n zot-system
+
+# Login to using oras
+oras login <k8s hostname> -u admin -p <zot password>
+
+# Example of using Oras to push artifact:
+touch esxi-custom-7.0.iso
+oras push <k8s hostname>:31234/vmware-operator/esxi:7.0-custom \
+  esxi-custom-7.0.iso:application/vnd.acme.vmware.iso.layer.v1+tar
+```
 
 ### Handy Monitoring CLI Commands:
 

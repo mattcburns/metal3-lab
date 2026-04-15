@@ -1,0 +1,31 @@
+# zot-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zot-ingress
+  namespace: zot-system
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Inline buffering for large OCI layers (no Middleware CRD required)
+    traefik.ingress.kubernetes.io/buffering: |
+      maxRequestBodyBytes: 4294967296     # 4 GiB — increase if you push bigger layers
+      memRequestBodyBytes: 20971520       # 20 MiB in-memory buffer
+      maxResponseBodyBytes: 4294967296
+      memResponseBodyBytes: 20971520
+spec:
+  ingressClassName: traefik              # ← Good practice for k3s/Traefik
+  rules:
+  - host: <the k8s host>
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zot-registry
+            port:
+              number: 5000
+  tls:
+  - hosts:
+    - <the k8s host>
+    secretName: zot-tls-secret
