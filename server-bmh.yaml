@@ -66,8 +66,8 @@ spec:
   # Uncomment to initiate provision.
   # Comment to deprovision.
   # image:
-  #   url: "http://<IP of k3s node>:8080/<os-image-name>.img"
-  #   checksum: "http://<IP of k3s node>:8080/SHA256SUMS"  # or the raw sha256 hash string
+  #   url: "oci://<k8s node>/metal3-images/ubuntu:24.04"
+  #   checksum: "sha256 hash string"
   #   checksumType: sha256
   #   format: qcow2  # or omit for auto-detect
   # userData:
